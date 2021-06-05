@@ -2,7 +2,7 @@ package com.yotpo.metorikku
 
 import com.yotpo.metorikku.configuration.job.{Configuration, Output}
 import com.yotpo.metorikku.input.Reader
-import com.yotpo.metorikku.instrumentation.{InstrumentationProvider, StreamingQueryMetricsListener}
+import com.yotpo.metorikku.instrumentation.{InstrumentationFactory, InstrumentationProvider, StreamingQueryMetricsListener}
 import com.yotpo.metorikku.output.writers.cassandra.CassandraOutputWriter
 import com.yotpo.metorikku.output.writers.redis.RedisOutputWriter
 import org.apache.log4j.LogManager
@@ -12,14 +12,14 @@ import org.apache.spark.sql.SparkSession
 
 case class Job(val config: Configuration) {
   private val log = LogManager.getLogger(this.getClass)
-  val sparkSession = createSparkSession(config.appName, config.output)
-  val sparkContext = sparkSession.sparkContext
+  val sparkSession: SparkSession = createSparkSession(config.appName, config.output)
+  val sparkContext: SparkContext = sparkSession.sparkContext
 
   // Set up instrumentation
-  val instrumentationFactory = InstrumentationProvider.getInstrumentationFactory(
+  val instrumentationFactory: InstrumentationFactory = InstrumentationProvider.getInstrumentationFactory(
     config.appName, config.instrumentation)
 
-  val instrumentationClient = instrumentationFactory.create()
+  val instrumentationClient: InstrumentationProvider = instrumentationFactory.create()
   sparkContext.addSparkListener(new SparkListener() {
     override def onJobEnd(taskEnd: SparkListenerJobEnd): Unit = {
       instrumentationClient.close()
