@@ -9,10 +9,11 @@ DEFAULT_FS=${DEFAULT_FS:=file:///}
 DB_TYPE=${DB_TYPE:=mysql}
 USE_ATLAS=${USE_ATLAS:=false}
 HIVE_AUTH=${HIVE_AUTH:=NONE}
+KAFKA_LISTENER_TOPIC=${KAFKA_LISTENER_TOPIC:=hive_metastore_listener_events}
 
 if [ ! -z ${JSON_LOG} ] ; then
     echo "Setting Log type to JSON"
-    cat log4j.json.properties >> ${HIVE_HOME}/conf/hive-log4j.properties
+    cat log4j2.json.properties >> ${HIVE_HOME}/conf/hive-log4j2.properties
 fi
 
 cat >${HIVE_HOME}/conf/hive-site.xml <<EOL
@@ -89,15 +90,40 @@ cat >${HIVE_HOME}/conf/hive-site.xml <<EOL
       See HIVE-4409 for more details.
         </description>
      </property>
+     <property>
+        <name>hive.async.log.enabled</name>
+        <value>false</value>
+     </property>
 EOL
 
-if [[ ! -z ${USE_ATLAS} ]] ; then
+if [ $USE_KAFKA_EVENT_LISTENER == 'true' ]; then
+cat >>${HIVE_HOME}/conf/hive-site.xml <<EOL
+     <property>
+        <name>hive.metastore.event.listeners</name>
+        <value>com.expediagroup.apiary.extensions.events.metastore.kafka.listener.KafkaMetaStoreEventListener</value>
+     </property>
+     <property>
+        <name>com.expediagroup.apiary.extensions.events.metastore.kafka.messaging.topic.name</name>
+        <value>${KAFKA_LISTENER_TOPIC}</value>
+     </property>
+     <property>
+        <name>com.expediagroup.apiary.extensions.events.metastore.kafka.messaging.bootstrap.servers</name>
+        <value>${BOOTSTRAP_SERVERS}</value>
+     </property>
+     <property>
+        <name>com.expediagroup.apiary.extensions.events.metastore.kafka.messaging.client.id</name>
+        <value>HIVE_CLIENT</value>
+     </property>
+EOL
+fi
+
+if [ $USE_ATLAS == 'true' ]; then
+echo "USING ATLAS"
 cat >>${HIVE_HOME}/conf/hive-site.xml <<EOL
      <property>
         <name>hive.exec.post.hooks</name>
         <value>org.apache.atlas.hive.hook.HiveHook</value>
      </property>
-</configuration>
 EOL
 # hive-env extra jars
 cat >>${HIVE_HOME}/conf/hive-env.sh <<EOL
@@ -117,10 +143,10 @@ atlas.kafka.zookeeper.connect=${ZOOKEEPER_CONNECT}
 atlas.kafka.bootstrap.servers=${BOOTSTRAP_SERVERS}
 atlas.rest.address=${ATLAS_ADDR}
 EOL
-else
+fi
+
 cat >>${HIVE_HOME}/conf/hive-site.xml <<EOL
 </configuration>
 EOL
-fi
 
 $HIVE_HOME/bin/schematool -dbType ${DB_TYPE} -initSchema
